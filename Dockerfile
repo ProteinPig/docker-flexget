@@ -26,7 +26,7 @@ RUN set -eux  && \
     useradd -mUu 911 flexget && \
     usermod -G users flexget && \
     chmod +x /usr/bin/entrypoint.sh
-VOLUME /config /downloads
+VOLUME /config
 WORKDIR /config
 EXPOSE 3539
 ENTRYPOINT ["/usr/bin/entrypoint.sh"]
