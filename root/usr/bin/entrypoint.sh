@@ -35,4 +35,4 @@ fi
 # permissions
 chown -R flexget:flexget /config
 
-su flexget -c "/usr/local/bin/flexget -c /config/config.yml -l ${FG_LOGFILE:-flexget.log} -L ${FG_LOG_LEVEL:-info} daemon start --autoreload-config"
+su flexget -c "/usr/local/bin/flexget -c /config/config.yml -l ${FG_LOGFILE:-flexget.log} -L ${FG_LOG_LEVEL:-info} daemon start"
