@@ -9,4 +9,4 @@ python-levenshtein==0.27.3
 qbittorrent-api==2025.11.1
 transmission-rpc==7.0.11
 deluge-client==1.10.2
-flexget==3.19.10
+flexget==3.19.16
