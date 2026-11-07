@@ -1,14 +1,78 @@
-name: auto-merge
+# .github/workflows/dependabot-auto-merge.yml
+name: Dependabot Auto Merge
 
-on:
-  pull_request:
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   auto-merge:
     runs-on: ubuntu-latest
+    # 仅当 PR 由 Dependabot 创建，且目标是主分支时运行
+    if: |
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.base.ref == 'main'
+
     steps:
-      - uses: actions/checkout@v6
-      - uses: ahmadnassri/action-dependabot-auto-merge@v2
+      # 1. 获取 Dependabot 元数据，判断更新类型
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
         with:
-          target: minor
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      # 2. 关键：只处理 minor 和 patch 更新
+      #    major 版本更新将在此步骤被跳过，留给人工审查
+      - name: Check if update is minor or patch
+        id: check-semver
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-patch'
+        run: echo "eligible=true" >> "$GITHUB_OUTPUT"
+
+      # 3. 调用 GitHub API，等待 mergeable_state 变为 "clean"
+      #    "clean" 意味着分支保护规则要求的所有状态检查均已通过
+      - name: Wait for CI to pass (mergeable_state == clean)
+        id: wait-for-ci
+        if: steps.check-semver.outputs.eligible == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pull_number = context.issue.number;
+            const maxAttempts = 30; // 最多轮询 30 次
+            const delay = 20000; // 每次间隔 20 秒
+
+            for (let i = 0; i < maxAttempts; i++) {
+              const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
+              console.log(`Attempt ${i + 1}: mergeable_state = ${pr.mergeable_state}`);
+              
+              if (pr.mergeable_state === 'clean') {
+                console.log('CI passed, PR is clean and ready to merge.');
+                return;
+              }
+              // 如果状态是 "dirty" (有冲突) 或 "blocked" (被规则阻止)，可提前退出
+              if (pr.mergeable_state === 'dirty' || pr.mergeable_state === 'blocked') {
+                core.setFailed(`PR is not mergeable: ${pr.mergeable_state}`);
+                return;
+              }
+              await new Promise(r => setTimeout(r, delay));
+            }
+            core.setFailed('Timed out waiting for PR to become clean.');
+
+      # 4. 仅在 CI 通过后，执行合并
+      - name: Merge PR
+        if: steps.wait-for-ci.outcome == 'success'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN }} # 推荐使用 GitHub App 令牌或细粒度 PAT
+          script: |
+            const { owner, repo } = context.repo;
+            await github.rest.pulls.merge({
+              owner,
+              repo,
+              pull_number: context.issue.number,
+              merge_method: 'squash'
+            });
