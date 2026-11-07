@@ -7,6 +7,6 @@ matplotlib==3.10.9
 fuzzywuzzy==0.18.0
 python-levenshtein==0.27.3
 qbittorrent-api==2026.10.1
-transmission-rpc==7.0.11
+transmission-rpc==7.0.12
 deluge-client==1.10.2
 flexget==3.22.10
